@@ -1,0 +1,447 @@
+\documentclass[11pt]{article}
+\usepackage[top = 1in, bottom = 1in, left = 1in, right = 1in]{geometry}
+\usepackage{amsmath} 
+\usepackage{amssymb} 
+\usepackage{booktabs} 
+\usepackage{array} 
+\usepackage{graphicx} 
+\usepackage{float} 
+\usepackage{siunitx} 
+\usepackage{hyperref} 
+\usepackage{xcolor} 
+\usepackage{setspace} 
+\usepackage{enumitem} 
+\usepackage{caption}
+\usepackage{parskip}
+\usepackage{import}
+
+\begin{document}
+\title{Modeling NFL Game Outcomes With Various Statistical Techniques}
+\author{Matteo Gomez}
+\date{\today}
+\maketitle
+
+\section*{Introduction}
+The National Football League (NFL) is one of the most popular sports leagues in the United States, with millions of fans following the games throughout the season. As such, understanding and predicting the outcomes of these games is of great interest to many stakeholders, including fans, analysts, and teams. The increasing availability of play-level sports data provides an opportunity to evaluate team performance using statistical models. This report aims to explore various statistical techniques for modeling NFL game outcomes, including results from regression analysis, machine learning algorithms, and ensemble methods. By leveraging data from $2020-2025$ and applying these techniques, we seek to identify statistics that can accurately predict game results and provide insights into the factors that drive team success.
+
+\subsection*{Game Rules and Structure}
+The analysis assumes the standard rules and structure of NFL football as specified in the official NFL rulebook \cite{nfl_rules}. This report assumes knowledge of the basic rules of American football, as well as the structure of the league and progression throughout the season.
+
+\subsection*{NFL Statistics Debrief}
+The NFL collects a wide range of statistics to evaluate team and player performance. These statistics can be broadly categorized into offensive, defensive, and special teams metrics. Offensive statistics include passing yards, rushing yards, receiving yards, touchdowns, interceptions, and fumbles. Defensive statistics include tackles, sacks, interceptions, forced fumbles, and defensive touchdowns. Special teams statistics include field goals made and missed, punt and kickoff return yards, and blocked kicks.
+
+Some advanced statistics are also collected. EPA, CPOE, etc. are advanced metrics that provide a more nuanced understanding of team and player performance. Articles on EPA and more advanced statistics provide more information on these metrics \cite{nfl_advanced,espn_epa}.
+
+\section*{Data Collection and Preparation}
+The data for this report was collected through the R packages \texttt{tidyverse} and \texttt{nflreadr} \cite{nflreadr, tidyverse}. The package provides access to a variety of NFL data, including game results, player statistics, and team performance metrics. The primary dataset consists of NFL play-by-play observations from the 2020--2025 regular seasons. Each observation represents an individual play and contains information concerning the game state, teams involved, play type, yardage, EPA, success, turnovers, and other situational variables. This data was imported, cleaned, and processed using R, and the resulting datasets were used for analysis and modeling in Python, with the use of packages \texttt{Numpy}, \texttt{Pandas}, \texttt{matplotlib}, \texttt{scipy}, and \texttt{statsmodels} \cite{numpy, pandas, matplotlib, scipy, statsmodels}.
+
+The analysis focuses on regular-season games and excludes postseason games. Team-season observations are constructed from the underlying play-level data. After aggregation, the primary team-season dataset contains \[ 192 = 32 \text{ teams} \times 6 \text{ seasons} \] team-season observations. For game-level analysis, the dataset contains 3,230 team-game observations, corresponding to two team observations for each regular-season game.
+
+SQL was used to transform the raw play-by-play data into analysis-ready datasets. Core tables were constructed for individual games, team-game results, and team-season records. The team-season record contains: \begin{itemize} \item total games played, \item total wins, and \item win percentage. \end{itemize} Win percentage was calculated as \[ \text{Win Percentage} = \frac{\text{Wins}}{\text{Games Played}}. \] Additional SQL queries were used to calculate offensive efficiency, defensive efficiency, red-zone performance, explosive-play frequency, player efficiency, quarterback statistics, third-down performance, and first-half performance, which will be discussed in the following sections.
+
+
+
+\section*{Statistical Analysis}
+The following statistical techniques were used to analyze the data and answer the research questions posed in this report.
+
+\subsubsection*{Sample Size and Statistical Power} 
+The analysis contains 192 team-season observations for the majority of team-level models and 3,230 team-game observations for the early-game analysis. Sample size influences the precision of statistical estimates. Larger samples generally produce smaller standard errors and therefore make it easier to distinguish relatively small relationships from random variation \cite{samplesize}. This distinction is particularly relevant when interpreting player-level results and individual regression coefficients. Statistical significance should therefore be considered together with the estimated effect size and the amount of available data.
+
+\subsubsection*{Effect Size Versus Statistical Significance} 
+Statistical significance and practical importance are distinct concepts. A small $p$-value indicates that the observed relationship is unlikely under the null hypothesis, but it does not determine whether the relationship is large or practically meaningful. Conversely, a meaningful estimated coefficient may fail to reach conventional statistical significance when the sample is small or the estimate has substantial uncertainty. For this reason, the analysis considers $p$-values together with correlation coefficients, regression coefficients, confidence intervals, and $R^2$ \cite{pvalue}. 
+
+\subsubsection*{Pearson Correlation} 
+Pearson's correlation coefficient measures the strength and direction of a linear relationship between two continuous variables: \[ r = \frac{\operatorname{Cov}(X,Y)} {\sigma_X\sigma_Y}. \] The coefficient ranges from $-1$ to $1$. A value close to $1$ indicates a strong positive linear association, while a value close to $-1$ indicates a strong negative association. Values near zero indicate little linear association. The magnitude of $r$ describes the strength of the relationship, while its sign describes the direction. Statistical significance is evaluated separately using the corresponding hypothesis test and $p$-value. For a correlation test, the null hypothesis is \[ H_0:\rho=0, \] where $\rho$ is the population correlation coefficient. A small $p$-value provides evidence against the null hypothesis, indicating that the observed sample correlation is unlikely to have occurred if the population correlation were zero \cite{pearsoncorr}.
+
+\subsubsection*{Spearman Correlation} 
+Spearman's rank correlation measures the strength of a monotonic relationship between two variables. Instead of operating directly on the raw observations, the variables are converted to ranks. This provides a useful comparison with Pearson correlation. If Pearson and Spearman correlations are similar, the observed association is generally consistent across both the raw-value and rank-based representations. Spearman correlation is particularly useful in this project because NFL performance variables may not always have perfectly linear relationships with winning \cite{spearmancorr}.
+
+\subsubsection*{Coefficient of Determination} 
+The coefficient of determination, $R^2$, measures the proportion of the observed variation in the dependent variable explained by the regression model: \[ R^2 = 1- \frac{\mathrm{SSE}} {\mathrm{SST}}, \] where $\mathrm{SSE}$ is the residual sum of squares and $\mathrm{SST}$ is the total sum of squares. For example, an $R^2$ of $0.778$ indicates that approximately $77.8\%$ of the variation in observed team win percentage is explained by the variables included in the model. Importantly, $R^2$ measures explanatory power within the analyzed sample. It does not by itself establish that the model will predict future seasons with the same accuracy \cite{rsquared}.
+
+\subsubsection*{Multicollinearity} 
+Regression predictors can contain overlapping information. When predictors are strongly correlated with one another, the individual coefficient estimates may become unstable even when the model as a whole is highly significant. Multicollinearity can result in: \begin{itemize} \item larger coefficient standard errors, \item unstable coefficient estimates, \item changes in coefficient magnitude when predictors are added or removed, \item and individual predictors becoming statistically insignificant even when the overall model is strongly significant. \end{itemize} For example, the condition number reported for the traditional offensive model in Question 2 was approximately \[ 1.25\times10^3, \] indicating potential numerical instability associated with the predictor matrix \cite{multicollinearity}.
+
+\subsubsection*{Ordinary Least Squares Regression} 
+Ordinary least squares (OLS) regression was used to model team win percentage as a function of one or more performance variables. A general multiple regression model takes the form \[ Y_i = \beta_0 + \beta_1X_{i1} + \cdots + \beta_kX_{ik} + \epsilon_i, \] where $Y_i$ is the observed win percentage for team-season $i$, $X_{ij}$ are performance metrics, $\beta_j$ are regression coefficients, and $\epsilon_i$ is the unexplained error. The coefficients are estimated by minimizing the residual sum of squares: \[ \mathrm{SSE} = \sum_{i=1}^{n} (Y_i-\hat{Y}_i)^2. \] The resulting coefficient $\hat{\beta}_j$ represents the estimated change in the response variable associated with a one-unit increase in predictor $X_j$, holding the other predictors constant \cite{ols}.
+
+\subsubsection*{Adjusted $R^2$} 
+Adding predictors to an OLS model can never decrease ordinary $R^2$, even if the additional variables contribute very little useful information. Adjusted $R^2$ addresses this issue by incorporating a penalty for the number of predictors: \[ R^2_{\mathrm{adj}} = 1- (1-R^2) \frac{n-1}{n-k-1}, \] where $n$ is the sample size and $k$ is the number of predictors. Consequently, adjusted $R^2$ is useful for comparing models with different numbers of explanatory variables. A small difference between $R^2$ and adjusted $R^2$ suggests that the model's additional predictors are not substantially inflating the apparent explanatory power \cite{adjusted_rsquared}.
+
+\subsubsection*{Coefficient Standard Errors and $t$-Statistics} 
+Each estimated regression coefficient has an associated standard error: \[ SE(\hat{\beta}_j). \] The standard error measures the uncertainty associated with the estimated coefficient. A smaller standard error indicates that the coefficient is estimated more precisely. The corresponding $t$-statistic is \[ t_j = \frac{\hat{\beta}_j} {SE(\hat{\beta}_j)}. \] For the hypothesis \[ H_0:\beta_j=0, \] a large absolute value of $t_j$ indicates that the estimated coefficient is far from zero relative to its uncertainty. The corresponding $p$-value measures the probability of obtaining a test statistic at least as extreme as the observed value if the null hypothesis were true. Therefore, a statistically significant coefficient provides evidence that a predictor has a nonzero conditional association with the response variable, given the other variables included in the model \cite{tstatistic,standarderror}.
+
+\subsubsection*{Confidence Intervals} 
+A confidence interval provides a range of plausible values for a population regression coefficient. A $95\%$ confidence interval can be written as \[ \hat{\beta}_j \pm t_{\alpha/2,\;df} SE(\hat{\beta}_j). \] If a $95\%$ confidence interval for a coefficient excludes zero, the corresponding two-sided hypothesis test is significant at approximately the $0.05$ level. Confidence intervals are useful because they provide information about the precision and possible magnitude of an estimated effect rather than only indicating whether the coefficient is statistically significant \cite{confidence_intervals}.
+
+\subsubsection*{The F-Statistic} 
+The F-statistic evaluates whether a multiple regression model provides statistically significant explanatory power as a whole. For a model containing $k$ predictors, the null hypothesis is \[ H_0: \beta_1=\beta_2=\cdots=\beta_k=0. \] The alternative hypothesis is \[ H_A: \text{at least one }\beta_j\neq0. \] The F-statistic can be expressed as \[ F = \frac{(\mathrm{SST}-\mathrm{SSE})/k} {\mathrm{SSE}/(n-k-1)}. \] The numerator represents the amount of variation explained by the model per predictor, while the denominator represents the residual variation per remaining degree of freedom. A large F-statistic indicates that the model explains substantially more variation than would be expected from residual noise alone. The F-statistic must be interpreted together with its $p$-value. A very small F-test $p$-value indicates that the null hypothesis that all slope coefficients are simultaneously zero can be rejected. Importantly, the overall F-test and individual coefficient tests answer different questions. The F-test asks whether the model has explanatory power as a group, whereas individual $t$-tests determine whether specific predictors contribute conditional on the other variables in the model \cite{fstatistic}.
+
+\subsubsection*{Logistic Regression} 
+Logistic regression was used when the dependent variable represented an individual game outcome. The model estimates the probability of winning through the logit transformation: \[ \log \left( \frac{P(\text{Win})} {1-P(\text{Win})} \right) = \beta_0+\beta_1X. \] The coefficient $\beta_1$ represents the change in log-odds associated with a one-unit increase in $X$. The coefficient can alternatively be expressed as an odds ratio: \[ OR=e^{\beta_1}. \] Because EPA per play is measured on a relatively small scale, a one-unit increase may represent an unusually large change in actual game performance. Therefore, the analysis emphasizes quartile-based winning rates in addition to the raw logistic coefficient \cite{logistic_regression}.
+
+\subsubsection*{Pseudo $R^2$} 
+Unlike OLS regression, logistic regression does not have a directly equivalent ordinary $R^2$ based on variance decomposition. Instead, pseudo-$R^2$ statistics can be used to summarize model improvement relative to a null model. The pseudo-$R^2$ reported by the logistic regression should therefore not be interpreted as ''the percentage of games correctly explained'' and should not be directly compared numerically with an OLS $R^2$.
+
+In this report, the pseudo-$R^2$ is calculated as \[ R^2_{\mathrm{pseudo}} = 1 - \frac{\ell_{\mathrm{full}}}{\ell_{\mathrm{null}}}, \] where $\ell$ denotes the log-likelihood. A larger pseudo-$R^2$ indicates that the model provides more information about the observed outcomes than the null model, but it does not have a direct interpretation in terms of explained variance \cite{pseudo_r2}.
+
+\subsubsection*{Likelihood-Ratio Test} 
+For the logistic regression model, overall significance was evaluated using a likelihood-ratio test. The likelihood-ratio statistic compares the fitted model with a restricted model containing no predictors: \[ LR = 2 \left( \ell_{\mathrm{full}} - \ell_{\mathrm{null}} \right), \] where $\ell$ denotes the log-likelihood. A small likelihood-ratio test $p$-value indicates that the model containing the predictor provides significantly more information about the observed outcomes than the null model \cite{lrt}.
+
+
+
+\section*{Methodology}
+The methodology for this report involves the application of various statistical techniques to the collected NFL data. The analysis uses the datasets specificed in the previous section. The dataset contains individual offensive and defensive plays, allowing game-level and team-level statistics to be constructed through SQL aggregation. The analysis combines relational data processing in SQL with statistical analysis in Python. Pearson and Spearman correlations are used to evaluate associations, while ordinary least squares (OLS) and logistic regression are used to construct multivariate models.
+
+The goal of the project was to answer the following questions concerning the relationship between various statistics and team success in the NFL:
+\begin{enumerate}
+    \item Does red-zone efficiency translate into wins?
+    \item Does EPA outperform traditional statistics at explaining team success?
+    \item Do explosive plays contribute more to winning than overall offensive efficiency?
+    \item Who are the most efficient players after controlling for minimum workload?
+    \item Which player statistics are most associated with team success?
+    \item How important is third-down efficiency to winning?
+    \item Does early-game performance predict the eventual winner?
+    \item Which teams outperform their underlying efficiency?
+\end{enumerate}
+This will help us determine which statistics are most correlated with game outcomes and provide insights into the factors that drive team success, allowing us to hopefully develop a model for predicting future game outcomes.
+
+
+
+% ================================================= 
+\section*{1. Does Red-Zone Efficiency Translate into Wins?}
+% =================================================
+
+Red-zone efficiency measures a team's ability to generate scoring value within the opponent's 20-yard line. Each drive was counted as a single red-zone possession. The analysis evaluated touchdown rate, scoring rate, turnover rate, net efficiency, EPA per possession, and EPA per play.
+
+\subsection*{Correlation Analysis}
+
+Table~\ref{tab:red-zone-performance} summarizes the pairwise relationships between red-zone performance and team win percentage.
+
+\begin{table}[H]
+\centering
+\caption{Red-Zone Performance and Win Percentage}
+\label{tab:red-zone-performance}
+    \begin{tabular}{lrr}
+        \toprule
+        Metric & Pearson $r$ & $p$-value \\
+        \midrule
+        Touchdown Rate & 0.428 & $5.73\times10^{-10}$ \\
+        Scoring Rate & 0.342 & $1.18\times10^{-6}$ \\
+        Turnover Rate & -0.287 & $5.38\times10^{-5}$ \\
+        Net Efficiency & 0.459 & $2.20\times10^{-11}$ \\
+        EPA per Possession & 0.512 & $3.38\times10^{-14}$ \\
+        EPA per Play & 0.512 & $3.07\times10^{-14}$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+Red-zone EPA per play exhibited the strongest pairwise association with win percentage, with Pearson's $r=0.512$ ($p<0.001$). Figure~\ref{fig:red-zone-epa} illustrates the corresponding positive relationship across the 192 team-seasons.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{/Users/matteo/Desktop/projects/nfl/analysis_output/q1_red_zone_epa.png}
+\caption{Red-zone EPA per play versus team win percentage across 192
+team-seasons. The fitted line illustrates the positive linear association.}
+\label{fig:red-zone-epa}
+\end{figure}
+
+\subsection*{Multivariate Model}
+
+The OLS model was specified as
+
+\begin{equation}
+\text{WinPct} =
+\beta_0 +
+\beta_1(\text{TD Rate}) +
+\beta_2(\text{Turnover Rate}) +
+\beta_3(\text{Red-Zone EPA/Play}) +
+\epsilon
+\end{equation}
+
+The model explained $26.5\%$ of the variation in win percentage ($R^2=0.265$, adjusted $R^2=0.253$) and was statistically significant overall ($F=22.55$, $p=1.62\times10^{-12}$). Red-zone EPA per play remained statistically significant ($\hat{\beta}=0.881$, $p<0.001$), while touchdown rate and turnover rate were not individually significant after controlling for the other variables. Thus, EPA per play captured information about red-zone performance beyond the conventional touchdown and turnover measures.
+
+
+
+% =================================================
+\section*{2. Does EPA Outperform Traditional Statistics?}
+% =================================================
+
+The second analysis compared a traditional model using yards per play, offensive success rate, and turnover rate with an EPA-based model using EPA per play and turnover rate.
+
+\begin{table}[H]
+\centering
+\caption{Offensive Metrics and Win Percentage}
+\label{tab:offensive-metrics}
+    \begin{tabular}{lrr}
+        \toprule
+        Metric & Pearson $r$ & $p$-value \\
+        \midrule
+        Yards per Play & 0.644 & $7.78\times10^{-24}$ \\
+        EPA per Play & 0.734 & $8.20\times10^{-34}$ \\
+        Success Rate & 0.668 & $3.24\times10^{-26}$ \\
+        Turnover Rate & -0.469 & $6.85\times10^{-12}$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+EPA per play had the strongest individual correlation with win percentage ($r=0.734$, $p<0.001$). Figure~\ref{fig:model-r2} compares the in-sample explanatory power of the two regression specifications.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.70\textwidth]{/Users/matteo/Desktop/projects/nfl/analysis_output/q2_model_r2.png}
+\caption{In-sample explanatory power of the traditional-statistics and
+EPA-based team-success models.}
+\label{fig:model-r2}
+\end{figure}
+
+\subsection*{Model Comparison}
+
+\begin{table}[H]
+\centering
+\caption{Traditional and EPA-Based Regression Models}
+\label{tab:model-comparison}
+    \begin{tabular}{lrrrr}
+        \toprule
+        Model & $R^2$ & Adj. $R^2$ & $F$ & Model $p$-value \\
+        \midrule
+        Traditional & 0.516 & 0.509 & 66.89 & $1.77\times10^{-29}$ \\
+        EPA-Based & 0.543 & 0.538 & 112.40 & $6.96\times10^{-33}$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+The traditional model explained $51.6\%$ of the observed variation in win percentage, compared with $54.3\%$ for the EPA-based model. The corresponding adjusted $R^2$ values were $0.509$ and $0.538$, respectively, and both models were statistically significant overall. The EPA specification therefore provided a modest increase in in-sample explanatory power. However, because the models contain different predictors and numbers of predictors, this comparison does not establish universal superiority of EPA; an out-of-sample evaluation would be required to assess predictive performance. The traditional model's condition number of approximately $1.25\times10^3$ also suggests potential multicollinearity or numerical scaling issues among its predictors.
+
+
+
+% =================================================
+\section*{3. Do Explosive Plays Contribute More Than Overall Efficiency?}
+% =================================================
+
+Explosive plays were defined as passing plays gaining at least 20 yards or rushing plays gaining at least 10 yards. Explosive-play rate was positively associated with win percentage ($r=0.450$, $p<0.001$). The OLS model
+
+\begin{equation}
+    \text{WinPct}
+    =
+    \beta_0+
+    \beta_1(\text{Explosive Rate})+
+    \beta_2(\text{EPA/Play})+
+    \epsilon
+\end{equation}
+
+explained $54.4\%$ of the variation in win percentage ($R^2=0.544$, adjusted $R^2=0.539$; $F=112.8$, $p=5.63\times10^{-33}$). EPA per play remained statistically significant ($\hat{\beta}=1.662$, $p<0.001$), whereas explosive-play rate did not ($\hat{\beta}=-1.166$, $p=0.156$). Thus, although explosive-play frequency was associated with winning in isolation, it did not provide statistically distinguishable explanatory information after accounting for overall EPA efficiency.
+
+
+
+% =================================================
+\section*{4. Who are the Most Efficient Players After Controlling for Minimum Workload?}
+% =================================================
+
+Team-level efficiency measures describe overall performance but do not identify which individual player-seasons produced the most efficient results. EPA was therefore aggregated separately for quarterbacks, running backs, and receivers across the 2020--2025 seasons. To reduce instability from limited opportunities, minimum workload thresholds of 300 pass attempts for quarterbacks, 100 rushing attempts for running backs, and 50 targets for receivers were imposed.
+
+For quarterbacks, efficiency was measured using EPA per pass attempt. Figure~\ref{fig:top-qbs} shows the eight highest-efficiency qualifying seasons. The 2024 Lamar Jackson season ranked first at approximately $0.345$ EPA per attempt across 499 attempts.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{/Users/matteo/Desktop/projects/nfl/analysis_output/q4_top_qbs.png}
+\caption{Eight highest-efficiency quarterback seasons by EPA per pass
+attempt after applying the 300-attempt minimum workload threshold.}
+\label{fig:top-qbs}
+\end{figure}
+
+Running backs were evaluated using EPA per rushing attempt. It is important to note that running backs were not constrained to players who are listed at the position and may include players who primarily play other positions but had a sufficient number of carries to meet the workload threshold. As shown in Figure~\ref{fig:top-rbs}, the 2024 Josh Allen season ranked first among qualifying seasons at approximately $0.559$ EPA per rush across 102 carries.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{/Users/matteo/Desktop/projects/nfl/analysis_output/q4_top_rbs.png}
+\caption{Eight highest-efficiency running back seasons by EPA per rush
+after applying the 100-carry minimum workload threshold.}
+\label{fig:top-rbs}
+\end{figure}
+
+For receivers, EPA was normalized by the number of targets. Figure~\ref{fig:top-receivers} shows the highest-efficiency qualifying seasons, with 2025 Dalton Kincaid ranking first at approximately $0.788$ EPA per target across 50 targets.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{/Users/matteo/Desktop/projects/nfl/analysis_output/q4_top_receivers.png}
+\caption{Eight highest-efficiency receiver seasons by EPA per target
+after applying the 50-target minimum workload threshold.}
+\label{fig:top-receivers}
+\end{figure}
+
+Across the three positions, the highest qualifying seasons reached approximately $0.345$ EPA per pass attempt, $0.559$ EPA per rush, and $0.788$ EPA per target. These values are not directly comparable across positions because the underlying opportunities and EPA distributions differ. The workload thresholds reduce small-sample instability but do not eliminate contextual effects from offensive scheme, teammates, opponents, field position, game situation, or player role. In particular, receiver EPA per target incorporates quarterback and team context and should therefore be interpreted as a season-specific measure of observed efficiency rather than a definitive measure of individual skill. Rushing EPA per attempt is similarly influenced by offensive line performance, play design, and game context. The results therefore describe observed efficiency rather than a pure measure of individual talent.
+
+
+
+% =================================================
+\section*{5. Which Quarterback Statistics Are Most Associated with Team Success?}
+% =================================================
+
+Building on the player-level analysis, this section compares three quarterback measures: QB EPA per play, completion percentage over expected (CPOE), and QB success rate.
+
+Across the 192 team-seasons, QB EPA per play had the strongest pairwise association with win percentage ($r=0.735$, $p<0.001$), followed by QB success rate ($r=0.664$, $p<0.001$) and CPOE ($r=0.520$, $p<0.001$). The corresponding Spearman correlations were similar, indicating that the observed relationships were consistent under both linear and rank-based measures.
+
+Figure~\ref{fig:qb-epa} illustrates the relationship between QB EPA per play and team win percentage.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{/Users/matteo/Desktop/projects/nfl/analysis_output/q5_qb_epa.png}
+\caption{QB EPA per play versus team win percentage across 192 team-seasons. The fitted line illustrates the positive association between quarterback efficiency and team success.}
+\label{fig:qb-epa}
+\end{figure}
+
+To evaluate whether these measures provided unique information when considered simultaneously, the following OLS model was estimated:
+
+\begin{equation}
+    \text{Win\%}
+    =
+    \beta_0
+    +
+    \beta_1(\text{QB EPA/play})
+    +
+    \beta_2(\text{CPOE})
+    +
+    \beta_3(\text{QB Success Rate})
+    +
+    \epsilon.
+\end{equation}
+
+The model explained $54.1\%$ of the observed variation in win percentage ($R^2=0.541$, adjusted $R^2=0.534$; $F=73.93$, $p<10^{-31}$). QB EPA per play remained statistically significant ($\hat{\beta}=1.168$, $p<0.001$), while CPOE ($\hat{\beta}=-0.0015$, $p=0.781$) and QB success rate ($\hat{\beta}=-0.172$, $p=0.759$) did not.
+
+Thus, although all three measures were individually associated with winning, EPA per play contained the strongest conditional signal in this model. The nonsignificance of CPOE and success rate does not imply that accuracy or successful plays are unimportant; rather, their information about team success substantially overlaps with the information captured by EPA per play.
+
+These results describe associations rather than causal effects. Team win percentage also depends on defensive performance, special teams, turnovers, field position, and game situation, while the observations represent team-seasons rather than independent measures of quarterback value.
+
+
+
+% =================================================
+\section*{6. How Important Is Third-Down Efficiency?}
+% =================================================
+
+Third-down conversion rate was strongly associated with team success, as illustrated in Figure~\ref{fig:third-down}.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{/Users/matteo/Desktop/projects/nfl/analysis_output/q6_third_down.png}
+\caption{Third-down conversion rate versus team win percentage across
+192 team-seasons.}
+\label{fig:third-down}
+\end{figure}
+
+The Pearson correlation was $r=0.640$ ($p<0.001$). A simple OLS model explained $41.0\%$ of the variation in win percentage ($R^2=0.410$), with a coefficient of $2.480$ ($p<0.001$). The correlation and regression results therefore provide consistent evidence of a substantial association between third-down efficiency and team success, although the observational design does not establish a causal effect.
+
+
+
+% =================================================
+\section*{7. Does Early-Game Performance Predict the Winner?}
+% =================================================
+
+First-half EPA per play was analyzed at the team-game level using 3,230 observations. Figure~\ref{fig:first-half-quartiles} shows the eventual win rate across quartiles of first-half EPA per play.
+
+\begin{table}[H]
+\centering
+\caption{Winning Rate by First-Half EPA Quartile}
+\label{tab:first-half-quartiles}
+    \begin{tabular}{lrrr}
+        \toprule
+        Quartile & Observations & Wins & Win Rate \\
+        \midrule
+        Q1 & 808 & 195 & 24.1\% \\
+        Q2 & 807 & 345 & 42.8\% \\
+        Q3 & 807 & 470 & 58.2\% \\
+        Q4 & 808 & 600 & 74.3\% \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{/Users/matteo/Desktop/projects/nfl/analysis_output/q7_first_half_epa_quartiles.png}
+\caption{Eventual win rate by quartile of first-half EPA per play.}
+\label{fig:first-half-quartiles}
+\end{figure}
+
+The relationship was strongly monotonic: teams in the lowest quartile won $24.1\%$ of their games, compared with $74.3\%$ among teams in the highest quartile. The Pearson correlation between first-half EPA per play and game outcome was $r=0.385$ ($p<0.001$).
+
+A logistic regression model,
+
+\begin{equation}
+    \log\left(
+    \frac{P(\text{Win})}{1-P(\text{Win})}
+    \right)
+    =
+    \beta_0+
+    \beta_1(\text{First-Half EPA/Play}),
+\end{equation}
+
+produced an estimated coefficient of $\hat{\beta}_1=3.313$ ($SE=0.163$, $z=20.268$, $p<0.001$), with a $95\%$ confidence interval of $[2.993,3.634]$. The likelihood-ratio test was also highly significant ($p=1.54\times10^{-115}$). The model's pseudo-$R^2$ was $0.1166$; unlike the OLS $R^2$ values reported above, this statistic measures relative improvement within the logistic-regression framework. Together, the quartile and regression results indicate a strong association between early-game efficiency and eventual game outcome.
+
+
+
+% =================================================
+\section*{8. Which Teams Outperform Their Underlying Efficiency?}
+% =================================================
+
+The final model evaluated whether team win percentage deviated from the level implied by measured offensive and defensive efficiency. The five predictors were offensive EPA per play, offensive success rate, offensive turnover rate, defensive EPA per play, and defensive success rate:
+
+\begin{align} 
+    Win\% &= \beta_0 + \beta_1(\text{Offensive EPA/Play}) + \beta_2(\text{Offensive Success}) \nonumber \\ 
+    &\quad + \beta_3(\text{Offensive Turnover Rate}) + \beta_4(\text{Defensive EPA/Play}) \nonumber \\
+    &\quad + \beta_5(\text{Defensive Success}) + \epsilon.
+\end{align}
+    
+
+The model explained $77.8\%$ of the variation in team win percentage ($R^2=0.778$, adjusted $R^2=0.772$) and was statistically significant overall ($F=130.5$, $p=7.29\times10^{-59}$).
+
+Figure~\ref{fig:actual-expected} compares each team's actual win percentage with the value fitted by the efficiency model.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.82\textwidth]{/Users/matteo/Desktop/projects/nfl/analysis_output/q8_actual_vs_expected.png}
+\caption{Actual versus efficiency-expected win percentage. The diagonal
+line represents equality between actual and fitted win percentage.}
+\label{fig:actual-expected}
+\end{figure}
+
+Observations above the diagonal line won more frequently than fitted by the model, while observations below the line won less frequently. The largest positive residual among the highlighted observations occurred for the 2022 Minnesota team, with an observed win percentage of approximately $0.765$ compared with an in-sample fitted value of $0.477$. The 2025 Kansas City team showed a large negative residual, with an observed win percentage of approximately $0.353$ compared with a fitted value of $0.577$.
+
+These residuals represent deviations from the model's fitted relationship rather than independently validated predictions. Because the fitted values are generated from the same observations used to estimate the regression, they identify in-sample over- and underperformance but do not establish that these deviations would persist in future seasons.
+
+
+
+\section*{Discussion}
+
+The eight analyses collectively demonstrate that NFL team success is strongly associated with measures of offensive, defensive, and situational efficiency. Although the strength of these relationships varies across statistics and levels of analysis, a consistent pattern emerges: measures that account for the value and context of individual plays, particularly EPA per play, tend to contain substantial information about winning. At the same time, the results indicate that no single statistic fully characterizes team success. The strongest relationships arise when multiple dimensions of team performance are considered simultaneously.
+
+A central finding of the analysis is the repeated strength of EPA as a measure of team performance. Red-zone EPA per play exhibited the strongest pairwise association with win percentage among the red-zone measures examined and remained statistically significant after controlling for touchdown and turnover rates. At the broader offensive level, EPA per play also had the strongest individual correlation with win percentage among the primary offensive measures considered. The EPA-based regression explained 54.3\% of the observed variation in win percentage, compared with 51.6\% for the traditional-statistics model. This improvement is meaningful but relatively modest, and the two models used different predictor sets. Therefore, the results provide evidence that EPA is a useful efficiency measure, but they do not establish that EPA is universally superior to traditional statistics.
+
+The explosive-play analysis further illustrates the information captured by EPA. Explosive-play rate was positively associated with win percentage when considered independently, but it was no longer statistically significant after EPA per play was included in the regression. This suggests that much of the information associated with explosive-play frequency is also represented by overall EPA efficiency. Rather than indicating that explosive plays are unimportant, the result suggests that counting explosive plays alone may provide less additional information once the broader value of individual plays is accounted for.
+
+The quarterback analyses produced a similar result. QB EPA per play, CPOE, and QB success rate were each strongly associated with team win percentage in pairwise analysis. However, when the three measures were included simultaneously, only QB EPA per play remained statistically significant. This difference between pairwise and multivariate results demonstrates the importance of considering overlapping information among predictors. The nonsignificance of CPOE and success rate in the multivariate model does not imply that accuracy or successful plays are unimportant. Rather, their information about team success substantially overlaps with the information captured by QB EPA per play.
+
+The player-level analysis extends this efficiency framework beyond team performance. Applying workload thresholds produced identifiable high-efficiency player-seasons at the quarterback, running back, and receiver positions. These thresholds reduce the influence of extremely small samples, but they do not remove contextual effects. EPA per opportunity reflects the environment in which a player operates, including offensive scheme, teammates, opponents, field position, and game situation. Receiver EPA per target, for example, is influenced by the quarterback and the quality of opportunities received. Consequently, the player rankings are best interpreted as measures of observed season-specific efficiency rather than definitive rankings of individual talent. A more detailed player model would need to account for usage and situational context before attributing observed efficiency more directly to individual performance.
+
+The situational analyses reinforce the broader relationship between efficiency and winning. Third-down conversion rate showed a substantial association with team win percentage, while first-half EPA per play was strongly associated with the eventual game outcome. The difference in winning rates between the lowest and highest first-half EPA quartiles was particularly pronounced, with win rates increasing from 24.1\% to 74.3\%. These results indicate that performance early in a game contains considerable information about the eventual outcome. However, the relationship should be interpreted in the context of the dynamic nature of football games. Early performance can affect subsequent game state, play calling, and opponent strategy, meaning that the observed association does not establish a causal effect of first-half efficiency on winning.
+
+The final multivariate model provides the strongest evidence that team success is associated with several dimensions of efficiency simultaneously. Offensive EPA per play, offensive success rate, offensive turnover rate, defensive EPA per play, and defensive success rate jointly explained 77.8\% of the observed variation in team win percentage. This relatively high in-sample $R^2$ suggests that the selected efficiency measures capture a substantial portion of the relationship between team performance and winning within the analyzed sample. The residual analysis also identifies team-seasons whose observed win percentages differed considerably from their fitted values. These deviations are potentially useful for identifying cases in which factors outside the model may have played an important role, but they should not be interpreted as independently validated predictions because the fitted values were generated from the same observations used to estimate the model.
+
+Several limitations provide opportunities for extending the analysis. The most important is that the current study is primarily observational and focuses on relationships within the 2020--2025 sample. The statistical significance of a predictor does not establish that changing that variable would cause a corresponding change in win percentage. Opponent quality, injuries, coaching, schedule strength, home-field advantage, special teams, and game state may all affect both performance statistics and game outcomes. Incorporating these factors would allow future models to distinguish more clearly between relationships that persist across different contexts and relationships that may be partly attributable to omitted variables.
+
+A second limitation is the distinction between in-sample explanatory power and out-of-sample predictive performance. The reported $R^2$ values describe how well the fitted models account for variation in the observations used to estimate them. In particular, the $R^2=0.778$ from the final efficiency model should not be interpreted as evidence that the model will explain 77.8\% of the variation in a future season. The next stage of the project should therefore evaluate the models chronologically, such as by fitting the model on the 2020--2024 seasons and evaluating its performance on 2025. Rolling-origin validation across multiple season boundaries would provide a stronger assessment of whether the observed relationships generalize across seasons.
+
+Future work could also incorporate opponent-adjusted efficiency measures. A team producing high EPA against weak opponents may not be equivalent to a team producing the same efficiency against consistently strong opponents. Adjusting offensive and defensive statistics for opponent quality could therefore provide a more informative estimate of underlying team strength. Similarly, because the dataset contains repeated observations from the same teams across multiple seasons, hierarchical or mixed-effects models could be investigated to account for persistent team-level differences while allowing performance to vary from season to season.
+
+The analysis could also be extended from season-level win percentage to game-level forecasting. The current study establishes relationships between performance measures and outcomes, but a future model could use statistics available before a game to estimate the probability of each team winning. This would require careful temporal separation between training and testing data to prevent information from the future from entering the predictors. Additional features could include opponent-adjusted efficiency, recent performance, home-field advantage, injuries, and other contextual variables. Logistic regression could provide an interpretable baseline, while machine learning and ensemble methods could then be evaluated against that baseline using the same out-of-sample observations.
+
+Finally, future analysis could examine the stability of the identified relationships across seasons and changing league environments. Offensive strategies, scoring rates, and the distribution of EPA may change over time, so coefficients estimated from one period may not remain constant indefinitely. Season-normalized statistics, interaction terms, and rolling estimates could be used to determine whether the relationships identified in this study are stable or whether their importance changes with the broader structure of the NFL.
+
+Overall, this analysis provides evidence that efficiency-based statistics, particularly EPA per play, contain substantial information about NFL team success. The repeated association between EPA and win percentage across red-zone, offensive, quarterback, and full-team analyses suggests that expected-points-based measures provide a useful framework for summarizing performance. However, the results also demonstrate the limits of relying on a single statistic or on in-sample explanatory power. The current analysis therefore serves as a foundation for a future forecasting framework in which opponent strength, contextual variables, temporal validation, and more flexible statistical or machine-learning methods can be incorporated to determine whether the relationships identified here translate into reliable predictions of future game outcomes.
+
+
+
+\newpage
+\bibliographystyle{ieeetr}
+\bibliography{references}
+
+\end{document}
